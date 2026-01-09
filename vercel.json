@@ -1,0 +1,136 @@
+{
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm ci",
+  "framework": "nextjs",
+  "outputDirectory": ".next",
+  "regions": ["iad1"],
+  "env": {
+    "ANTHROPIC_API_KEY": "@anthropic-api-key",
+    "DATABASE_URL": "@database-url",
+    "NEXT_PUBLIC_SUPABASE_URL": "@supabase-url",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "@supabase-anon-key",
+    "SUPABASE_SERVICE_KEY": "@supabase-service-key",
+    "N8N_WEBHOOK_URL": "@n8n-webhook-url",
+    "N8N_API_KEY": "@n8n-api-key",
+    "RESEND_API_KEY": "@resend-api-key",
+    "RESEND_FROM_EMAIL": "@resend-from-email",
+    "STRIPE_SECRET_KEY": "@stripe-secret-key",
+    "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY": "@stripe-publishable-key",
+    "STRIPE_WEBHOOK_SECRET": "@stripe-webhook-secret",
+    "STRIPE_PRICE_STARTER": "@stripe-price-starter",
+    "STRIPE_PRICE_UNLIMITED": "@stripe-price-unlimited",
+    "STRIPE_PRICE_SCOUT_STARTER": "@stripe-price-scout-starter",
+    "STRIPE_PRICE_SCOUT_PRO": "@stripe-price-scout-pro",
+    "STRIPE_PRICE_SCOUT_ENTERPRISE": "@stripe-price-scout-enterprise",
+    "NEXT_PUBLIC_VERCEL_ANALYTICS_ID": "@vercel-analytics-id",
+    "SENTRY_DSN": "@sentry-dsn",
+    "NEXT_PUBLIC_APP_URL": "@app-url",
+    "CRON_SECRET": "@cron-secret",
+    "WEBHOOK_SECRET": "@webhook-secret",
+    "NODE_ENV": "production"
+  },
+  "build": {
+    "env": {
+      "NEXT_TELEMETRY_DISABLED": "1"
+    }
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=()"
+        }
+      ]
+    },
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, max-age=0"
+        }
+      ]
+    },
+    {
+      "source": "/_next/static/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/images/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=604800"
+        }
+      ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/home",
+      "destination": "/",
+      "permanent": true
+    },
+    {
+      "source": "/dashboard",
+      "destination": "/analyze",
+      "permanent": false
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/health",
+      "destination": "/api/healthcheck"
+    }
+  ],
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "crons": [
+    {
+      "path": "/api/cron/scrape",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/analyze",
+      "schedule": "30 */6 * * *"
+    },
+    {
+      "path": "/api/cron/digest",
+      "schedule": "0 9 * * *"
+    }
+  ],
+  "functions": {
+    "app/api/analyze/route.ts": {
+      "maxDuration": 30,
+      "memory": 1024
+    },
+    "app/api/scrape/route.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  }
+}

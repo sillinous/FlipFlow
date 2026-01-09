@@ -1,0 +1,462 @@
+{
+  "name": "FlipFlow - Automated Flippa Scraper",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.FLIPFLOW_API_URL }}/api/scrape",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.FLIPFLOW_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "options",
+              "value": "={{ JSON.stringify({ maxPages: 5, onlyActive: true, onlyVerified: true, minPrice: 1000 }) }}"
+            },
+            {
+              "name": "source",
+              "value": "scheduled"
+            },
+            {
+              "name": "notifyOnComplete",
+              "value": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "trigger-scrape",
+      "name": "Trigger Scrape Job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 5,
+        "unit": "minutes"
+      },
+      "id": "wait-for-completion",
+      "name": "Wait 5 Minutes",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ],
+      "webhookId": "flipflow-scrape-wait"
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.FLIPFLOW_API_URL }}/api/scrape?jobId={{ $json.jobId }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.FLIPFLOW_API_KEY }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "check-job-status",
+      "name": "Check Job Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.job.status }}",
+              "operation": "equals",
+              "value2": "completed"
+            }
+          ]
+        }
+      },
+      "id": "check-success",
+      "name": "Job Completed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.FLIPFLOW_API_URL }}/api/analyze/batch",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.FLIPFLOW_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "listingIds",
+              "value": "={{ $json.job.result.listingIds }}"
+            },
+            {
+              "name": "minScore",
+              "value": 70
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "analyze-listings",
+      "name": "Analyze New Listings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        1340,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.highScoreListings.length }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "has-high-scores",
+      "name": "Has High Score Deals?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1560,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "={{ $env.SLACK_CHANNEL_ID }}",
+          "mode": "id"
+        },
+        "text": "=🎯 *New High-Value Deals Found!*\n\nFound {{ $json.highScoreListings.length }} listings with score ≥ 70\n\n{{ $json.highScoreListings.map(l => `• *${l.title}* - Score: ${l.score} - $${l.price.toLocaleString()}`).join('\\n') }}\n\nView details: {{ $env.FLIPFLOW_API_URL }}/dashboard",
+        "otherOptions": {}
+      },
+      "id": "send-slack-alert",
+      "name": "Send Slack Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [
+        1780,
+        100
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "1",
+          "name": "Slack OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.ALERT_FROM_EMAIL }}",
+        "toEmail": "={{ $env.ALERT_TO_EMAIL }}",
+        "subject": "=FlipFlow Alert: {{ $json.highScoreListings.length }} High-Value Deals Found",
+        "emailType": "html",
+        "message": "=<html>\n<head>\n  <style>\n    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }\n    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 5px 5px 0 0; }\n    .content { background: #f9f9f9; padding: 20px; }\n    .listing { background: white; margin: 15px 0; padding: 15px; border-radius: 5px; border-left: 4px solid #667eea; }\n    .score { display: inline-block; background: #10b981; color: white; padding: 5px 10px; border-radius: 3px; font-weight: bold; }\n    .price { color: #667eea; font-weight: bold; font-size: 1.2em; }\n    .footer { text-align: center; padding: 20px; color: #666; font-size: 0.9em; }\n  </style>\n</head>\n<body>\n  <div class=\"header\">\n    <h1>🎯 New High-Value Deals Found!</h1>\n    <p>{{ $json.highScoreListings.length }} listings with score ≥ 70</p>\n  </div>\n  \n  <div class=\"content\">\n    {{ $json.highScoreListings.map(listing => `\n      <div class=\"listing\">\n        <h2>${listing.title}</h2>\n        <p><span class=\"score\">Score: ${listing.score}</span> <span class=\"price\">$${listing.price.toLocaleString()}</span></p>\n        <p>${listing.summary || 'No summary available'}</p>\n        <p><strong>Revenue:</strong> $${listing.monthlyRevenue?.toLocaleString() || 'N/A'}/mo</p>\n        <p><strong>Profit:</strong> $${listing.monthlyProfit?.toLocaleString() || 'N/A'}/mo</p>\n        <p><a href=\"${listing.url}\" style=\"color: #667eea;\">View Listing →</a></p>\n      </div>\n    `).join('') }}\n  </div>\n  \n  <div class=\"footer\">\n    <p>Generated by FlipFlow Scout Agent</p>\n    <p><a href=\"{{ $env.FLIPFLOW_API_URL }}/dashboard\">View Dashboard</a> | <a href=\"{{ $env.FLIPFLOW_API_URL }}/settings\">Manage Alerts</a></p>\n  </div>\n</body>\n</html>",
+        "options": {}
+      },
+      "id": "send-email-alert",
+      "name": "Send Email Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "url": "={{ $env.WEBHOOK_URL }}",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "event",
+              "value": "high_score_listings"
+            },
+            {
+              "name": "count",
+              "value": "={{ $json.highScoreListings.length }}"
+            },
+            {
+              "name": "listings",
+              "value": "={{ JSON.stringify($json.highScoreListings) }}"
+            },
+            {
+              "name": "timestamp",
+              "value": "={{ new Date().toISOString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "webhook-notify",
+      "name": "Custom Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        1780,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "content": "=❌ *Scrape Job Failed*\n\nJob ID: {{ $json.jobId }}\nStatus: {{ $json.job.status }}\nError: {{ $json.job.error }}\n\nPlease check the logs for details.",
+        "additionalFields": {}
+      },
+      "id": "log-error",
+      "name": "Log Error",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll"
+      },
+      "id": "merge-results",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [
+        2000,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "passThrough"
+      },
+      "id": "no-high-scores",
+      "name": "No Alerts Needed",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1780,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Every 6 Hours": {
+      "main": [
+        [
+          {
+            "node": "Trigger Scrape Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Scrape Job": {
+      "main": [
+        [
+          {
+            "node": "Wait 5 Minutes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Check Job Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Job Status": {
+      "main": [
+        [
+          {
+            "node": "Job Completed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Job Completed?": {
+      "main": [
+        [
+          {
+            "node": "Analyze New Listings",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze New Listings": {
+      "main": [
+        [
+          {
+            "node": "Has High Score Deals?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has High Score Deals?": {
+      "main": [
+        [
+          {
+            "node": "Send Slack Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Email Alert",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Custom Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Alerts Needed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Slack Alert": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email Alert": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Custom Webhook": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "id": "1",
+      "name": "FlipFlow"
+    },
+    {
+      "id": "2",
+      "name": "Automation"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}

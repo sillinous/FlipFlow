@@ -1,0 +1,48 @@
+# Files to ignore during Vercel deployment
+
+# Development files
+.env.local
+.env.development.local
+*.md.backup
+TODO.md
+
+# Test files
+__tests__/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+/tests/
+
+# Documentation
+/docs/
+*.md
+!README.md
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.circleci/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+
+# Local data
+/data/
+/tmp/
+/temp/
+
+# Scripts (not needed in production)
+/scripts/scraper.ts
+/scripts/batch-analyze.ts
+/scripts/setup-db.ts
+
+# Keep deploy script out of production bundle
+/scripts/deploy.sh
