@@ -4,3 +4,4 @@ node_modules/
 .env
 *.tsbuildinfo
 node_modules/
+out/
