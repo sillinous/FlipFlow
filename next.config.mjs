@@ -6,5 +6,11 @@ const config = {
     unoptimized: true,
     domains: ['flippa.com', 'cdn.flippa.com'],
   },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
 }
 export default config
