@@ -1,11 +1,11 @@
 'use client'
-export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { Analysis, Profile } from '@/types'
+import { apiFetch } from '@/lib/api'
 
 function ScoreBadge({ score }: { score: number }) {
   const color =
@@ -130,14 +130,13 @@ export default function DashboardPage() {
   async function handleShare(analysisId: string) {
     setSharingId(analysisId)
     try {
-      const res = await fetch('/api/share', {
+      const res = await apiFetch('/api/share', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ analysis_id: analysisId })
       })
       const data = await res.json()
       if (data.token) {
-        const url = `${window.location.origin}/report/${data.token}`
+        const url = `${window.location.origin}/report?t=${data.token}`
         setShareLinks(prev => ({ ...prev, [analysisId]: url }))
         await navigator.clipboard.writeText(url).catch(() => {})
       }

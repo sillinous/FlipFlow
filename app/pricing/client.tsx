@@ -1,9 +1,9 @@
 'use client'
-export const dynamic = 'force-dynamic'
 
 import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
+import { apiFetch } from '@/lib/api'
 
 const plans = [
   {
@@ -77,7 +77,7 @@ export default function PricingPage() {
         return
       }
 
-      const res = await fetch('/api/checkout', {
+      const res = await apiFetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ priceId }),

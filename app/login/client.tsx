@@ -1,5 +1,4 @@
 'use client'
-export const dynamic = 'force-dynamic'
 
 import { useState, Suspense } from 'react'
 import { createClient } from '@/lib/supabase'
@@ -39,7 +38,7 @@ function LoginContent() {
     setError('')
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/api/auth/callback?next=${redirect}` }
+      options: { emailRedirectTo: `${window.location.origin}/callback?next=${redirect}` }
     })
     if (error) { setError(error.message); setLoading(false) }
     else setMagicSent(true)

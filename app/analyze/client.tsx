@@ -1,7 +1,7 @@
 'use client'
-export const dynamic = 'force-dynamic'
 
 import { useState, useEffect } from 'react'
+import { apiFetch } from '@/lib/api'
 import Link from 'next/link'
 
 interface FlipPlan {
@@ -165,7 +165,7 @@ export default function AnalyzePage() {
     if (!url.includes('flippa.com')) { setError('Please enter a valid Flippa listing URL'); return }
     setLoading(true); setError(''); setResult(null)
     try {
-      const res = await fetch('/api/analyze', {
+      const res = await (await import('@/lib/api')).apiFetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, guest_token: guestToken })
