@@ -235,8 +235,6 @@ export async function quickScoreListing(listing: FlippaListing): Promise<number>
     ],
     { temperature: 0.1, max_tokens: 50 }
   )
-
-  const raw = completion.choices[0]?.message?.content || '{"score": 50}'
   try {
     const parsed = JSON.parse(raw)
     return Math.min(100, Math.max(0, Number(parsed.score) || 50))
