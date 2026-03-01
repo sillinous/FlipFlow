@@ -7,50 +7,12 @@
   node_bundler = "esbuild"
   external_node_modules = ["@anthropic-ai/sdk"]
 
-# API route redirects → Netlify Functions
 [[redirects]]
   from = "/api/analyze"
   to = "/.netlify/functions/analyze"
   status = 200
   force = true
 
-[[redirects]]
-  from = "/api/auth/callback"
-  to = "/.netlify/functions/auth-callback"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/checkout"
-  to = "/.netlify/functions/checkout"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/scout"
-  to = "/.netlify/functions/scout"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/share"
-  to = "/.netlify/functions/share"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/compare"
-  to = "/.netlify/functions/compare"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/webhook"
-  to = "/.netlify/functions/webhook"
-  status = 200
-  force = true
-
-# SPA fallback — all unmatched routes serve index
 [[redirects]]
   from = "/*"
   to = "/index.html"

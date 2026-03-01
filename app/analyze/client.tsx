@@ -1,8 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { apiFetch } from '@/lib/api'
-import Link from 'next/link'
+import { useState } from 'react'
 
 interface FlipPlan {
   months_1_3: string
@@ -39,13 +37,12 @@ interface AnalysisResult {
     age_months: number
     monetization: string[]
     niche: string
-    description: string
   }
   analysis: {
     flip_score: number
     score_breakdown: { financials: number; traffic: number; risk: number; growth: number; operations: number }
-    red_flags: Array<{ severity: 'low'|'medium'|'high'; title: string; description: string }>
-    growth_opportunities: Array<{ impact: 'low'|'medium'|'high'; title: string; description: string; effort: string }>
+    red_flags: Array<{ severity: 'low' | 'medium' | 'high'; title: string; description: string }>
+    growth_opportunities: Array<{ impact: 'low' | 'medium' | 'high'; title: string; description: string; effort: string }>
     valuation: { fair_value_min: number; fair_value_max: number; multiple_analysis: string; recommendation: string }
     summary: string
     investment_thesis: string
@@ -53,132 +50,85 @@ interface AnalysisResult {
     roi_scenarios: { conservative: ROIScenario; base: ROIScenario; optimistic: ROIScenario } | null
     negotiation: Negotiation | null
   }
-  is_guest?: boolean
-  gated?: { flip_plan?: boolean; roi_scenarios?: boolean; negotiation?: boolean }
-  analysis_id?: string
-  quota_remaining?: number
 }
 
-type Tab = 'overview' | 'flags' | 'opportunities' | 'plan' | 'roi' | 'negotiate' | 'valuation'
+type Tab = 'overview' | 'flags' | 'opportunities' | 'valuation' | 'plan' | 'roi' | 'negotiate'
 
-function formatCurrency(n: number) {
-  if (n >= 1_000_000) return `$${(n/1_000_000).toFixed(1)}M`
-  if (n >= 1_000) return `$${(n/1_000).toFixed(0)}K`
+function fmt(n: number) {
+  if (!n) return '$—'
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`
   return `$${n}`
 }
 
-function getScoreColor(score: number) {
-  if (score >= 80) return { text: 'text-emerald-400', stroke: '#10b981', label: 'Strong Buy', bg: 'bg-emerald-500/10 border-emerald-500/20' }
-  if (score >= 65) return { text: 'text-blue-400', stroke: '#60a5fa', label: 'Consider', bg: 'bg-blue-500/10 border-blue-500/20' }
-  if (score >= 50) return { text: 'text-amber-400', stroke: '#f59e0b', label: 'Risky', bg: 'bg-amber-500/10 border-amber-500/20' }
-  return { text: 'text-red-400', stroke: '#ef4444', label: 'Pass', bg: 'bg-red-500/10 border-red-500/20' }
+function scoreColor(s: number) {
+  if (s >= 80) return { text: 'text-emerald-400', stroke: '#10b981', label: 'Strong Buy', ring: 'bg-emerald-500/10 border-emerald-500/30' }
+  if (s >= 65) return { text: 'text-blue-400', stroke: '#60a5fa', label: 'Consider', ring: 'bg-blue-500/10 border-blue-500/30' }
+  if (s >= 50) return { text: 'text-amber-400', stroke: '#f59e0b', label: 'Risky', ring: 'bg-amber-500/10 border-amber-500/30' }
+  return { text: 'text-red-400', stroke: '#ef4444', label: 'Pass', ring: 'bg-red-500/10 border-red-500/30' }
 }
 
 function ScoreRing({ score }: { score: number }) {
-  const cfg = getScoreColor(score)
-  const r = 52; const circ = 2 * Math.PI * r
+  const cfg = scoreColor(score)
+  const r = 52, circ = 2 * Math.PI * r
   return (
     <div className="relative w-36 h-36 flex-shrink-0">
       <svg className="w-36 h-36 -rotate-90" viewBox="0 0 120 120">
-        <circle cx="60" cy="60" r={r} fill="none" stroke="#1f2937" strokeWidth="9"/>
+        <circle cx="60" cy="60" r={r} fill="none" stroke="#1f2937" strokeWidth="9" />
         <circle cx="60" cy="60" r={r} fill="none" strokeWidth="9" strokeLinecap="round"
-          stroke={cfg.stroke}
-          strokeDasharray={`${(score/100)*circ} ${circ}`}
-          style={{ transition: 'stroke-dasharray 1.2s cubic-bezier(0.4,0,0.2,1)' }}
-        />
+          stroke={cfg.stroke} strokeDasharray={`${(score / 100) * circ} ${circ}`}
+          style={{ transition: 'stroke-dasharray 1.2s cubic-bezier(0.4,0,0.2,1)' }} />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className={`text-3xl font-black ${cfg.text} tabular-nums`}>{score}</span>
-        <span className={`text-[10px] font-bold tracking-widest uppercase ${cfg.text} opacity-80`}>{cfg.label}</span>
+        <span className={`text-3xl font-black tabular-nums ${cfg.text}`}>{score}</span>
+        <span className={`text-[10px] font-bold tracking-widest uppercase opacity-80 ${cfg.text}`}>{cfg.label}</span>
       </div>
     </div>
   )
 }
 
-function GatedOverlay({ feature, onUpgrade }: { feature: string; onUpgrade: () => void }) {
+function LoadingPulse() {
   return (
-    <div className="relative">
-      <div className="absolute inset-0 z-10 backdrop-blur-sm bg-gray-950/60 rounded-2xl flex flex-col items-center justify-center gap-3 border border-indigo-500/20">
-        <div className="text-2xl">🔒</div>
-        <p className="text-white font-semibold text-center">{feature}</p>
-        <p className="text-gray-400 text-sm text-center max-w-xs">Upgrade to Starter to unlock full analysis</p>
-        <Link href="/signup" className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors">
-          Sign Up Free →
-        </Link>
-      </div>
-      {/* Blurred preview */}
-      <div className="blur-sm pointer-events-none opacity-40">
-        <div className="space-y-3">
-          {[1,2,3].map(i => (
-            <div key={i} className="bg-gray-800 rounded-xl p-4 h-20"/>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function LoadingSteps() {
-  const steps = ['Fetching listing data', 'Processing financials', 'Detecting red flags', 'Building flip plan', 'Calculating FlipScore™']
-  const [active, setActive] = useState(0)
-  useEffect(() => {
-    const t = setInterval(() => setActive(p => (p + 1) % steps.length), 1400)
-    return () => clearInterval(t)
-  }, [])
-  return (
-    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-10 text-center">
+    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-12 text-center">
       <div className="flex flex-col items-center gap-5">
-        <div className="relative w-20 h-20">
-          <div className="absolute inset-0 rounded-full border-4 border-indigo-500/20"/>
-          <div className="absolute inset-0 rounded-full border-4 border-t-indigo-500 animate-spin"/>
-          <div className="absolute inset-0 flex items-center justify-center text-2xl">🔍</div>
+        <div className="relative w-16 h-16">
+          <div className="absolute inset-0 rounded-full border-4 border-indigo-500/20" />
+          <div className="absolute inset-0 rounded-full border-4 border-t-indigo-500 animate-spin" />
+          <div className="absolute inset-0 flex items-center justify-center text-xl">🔍</div>
         </div>
         <div>
-          <p className="text-white font-semibold text-lg">Analyzing deal...</p>
-          <p className="text-indigo-400 text-sm mt-2 h-5 transition-all">{steps[active]}</p>
-        </div>
-        <div className="flex gap-1.5">
-          {steps.map((_, i) => (
-            <div key={i} className={`h-1 rounded-full transition-all duration-500 ${i <= active ? 'bg-indigo-500 w-6' : 'bg-gray-700 w-3'}`}/>
-          ))}
+          <p className="text-white font-semibold text-lg mb-1">Analyzing listing...</p>
+          <p className="text-gray-500 text-sm">Fetching data · Running AI analysis · Building flip plan</p>
         </div>
       </div>
     </div>
   )
 }
 
-export default function AnalyzePage() {
+export default function AnalyzeClient() {
   const [url, setUrl] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState<AnalysisResult | null>(null)
-  const [activeTab, setActiveTab] = useState<Tab>('overview')
-  const [guestToken] = useState(() => {
-    if (typeof window === 'undefined') return ''
-    let t = localStorage.getItem('ff_guest_token')
-    if (!t) { t = crypto.randomUUID(); localStorage.setItem('ff_guest_token', t) }
-    return t
-  })
+  const [tab, setTab] = useState<Tab>('overview')
 
-  async function handleAnalyze(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!url.includes('flippa.com')) { setError('Please enter a valid Flippa listing URL'); return }
-    setLoading(true); setError(''); setResult(null)
+    if (!url.trim()) return
+    setLoading(true)
+    setError('')
+    setResult(null)
     try {
-      const res = await (await import('@/lib/api')).apiFetch('/api/analyze', {
+      const res = await fetch('/.netlify/functions/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, guest_token: guestToken })
+        body: JSON.stringify({ url }),
       })
       const data = await res.json()
-      if (data.guest_limit_reached) {
-        setError('You\'ve used your free analysis. Sign up to get 3 analyses per month, free.')
-        return
-      }
       if (!res.ok) throw new Error(data.error || 'Analysis failed')
       setResult(data)
-      setActiveTab('overview')
-    } catch (err: unknown) {
+      setTab('overview')
+    } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
       setLoading(false)
@@ -188,47 +138,49 @@ export default function AnalyzePage() {
   const sev = {
     high: { card: 'border-red-500/30 bg-red-950/20', badge: 'bg-red-500/15 text-red-400 border-red-500/20' },
     medium: { card: 'border-amber-500/30 bg-amber-950/20', badge: 'bg-amber-500/15 text-amber-400 border-amber-500/20' },
-    low: { card: 'border-gray-700 bg-gray-800/30', badge: 'bg-gray-700 text-gray-400 border-gray-600' },
+    low: { card: 'border-gray-700 bg-gray-800/30', badge: 'bg-gray-700/50 text-gray-400 border-gray-600' },
+  }
+  const imp = {
+    high: { card: 'border-emerald-500/30 bg-emerald-950/20', badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20' },
+    medium: { card: 'border-blue-500/30 bg-blue-950/20', badge: 'bg-blue-500/15 text-blue-400 border-blue-500/20' },
+    low: { card: 'border-gray-700 bg-gray-800/30', badge: 'bg-gray-700/50 text-gray-400 border-gray-600' },
   }
 
-  const tabs: { id: Tab; label: string; locked?: boolean }[] = [
+  const tabs: { id: Tab; label: string }[] = [
     { id: 'overview', label: 'Overview' },
-    { id: 'flags', label: `Flags (${result?.analysis.red_flags.length ?? 0})` },
-    { id: 'opportunities', label: `Growth (${result?.analysis.growth_opportunities.length ?? 0})` },
-    { id: 'valuation', label: 'Valuation' },
-    { id: 'plan', label: '12-Mo Plan', locked: result?.gated?.flip_plan },
-    { id: 'roi', label: 'ROI Model', locked: result?.gated?.roi_scenarios },
-    { id: 'negotiate', label: 'Negotiate', locked: result?.gated?.negotiation },
+    { id: 'flags', label: `🚩 Flags${result ? ` (${result.analysis.red_flags.length})` : ''}` },
+    { id: 'opportunities', label: `🚀 Growth${result ? ` (${result.analysis.growth_opportunities.length})` : ''}` },
+    { id: 'valuation', label: '💰 Valuation' },
+    { id: 'plan', label: '📅 Flip Plan' },
+    { id: 'roi', label: '📈 ROI Model' },
+    { id: 'negotiate', label: '🤝 Negotiate' },
   ]
 
   return (
     <div className="min-h-screen bg-gray-950">
       {/* Nav */}
       <nav className="border-b border-gray-800/60 px-6 py-4 flex items-center justify-between sticky top-0 bg-gray-950/90 backdrop-blur z-20">
-        <Link href="/" className="flex items-center gap-2 group">
+        <a href="/" className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
             <span className="text-white font-black text-sm">F</span>
           </div>
           <span className="text-white font-bold">FlipFlow</span>
-        </Link>
-        <div className="flex items-center gap-4">
-          <Link href="/pricing" className="text-gray-400 hover:text-white text-sm transition-colors">Pricing</Link>
-          <Link href="/signup" className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-4 py-1.5 rounded-lg transition-colors">Sign up free</Link>
-        </div>
+        </a>
+        <span className="text-gray-500 text-sm hidden sm:block">AI Deal Analyzer — Free &amp; Unlimited</span>
       </nav>
 
       <div className="max-w-4xl mx-auto px-4 py-10">
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-white mb-2">FlipScore™ Analyzer</h1>
-          <p className="text-gray-400">AI deal analysis in under 15 seconds. Red flags, ROI model, 12-month flip plan.</p>
+          <p className="text-gray-400">Paste any Flippa listing URL. Get AI-powered analysis instantly — no account needed.</p>
         </div>
 
         {/* Input */}
-        <form onSubmit={handleAnalyze} className="mb-8">
+        <form onSubmit={handleSubmit} className="mb-8">
           <div className="flex gap-2.5">
             <div className="flex-1 relative">
-              <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 text-sm">🔗</div>
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500">🔗</span>
               <input
                 type="url" value={url} onChange={e => setUrl(e.target.value)}
                 placeholder="https://flippa.com/listing/..."
@@ -236,43 +188,24 @@ export default function AnalyzePage() {
                 disabled={loading}
               />
             </div>
-            <button
-              type="submit" disabled={loading || !url}
-              className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-6 py-3.5 rounded-xl transition-all flex items-center gap-2 whitespace-nowrap shadow-lg shadow-indigo-500/20"
-            >
-              {loading ? (
-                <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>Analyzing...</>
-              ) : <>Analyze Deal <span className="opacity-60">→</span></>}
+            <button type="submit" disabled={loading || !url.trim()}
+              className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold px-6 py-3.5 rounded-xl transition-all flex items-center gap-2 whitespace-nowrap shadow-lg shadow-indigo-500/20">
+              {loading
+                ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Analyzing...</>
+                : <>Analyze →</>}
             </button>
           </div>
           {error && (
-            <div className="mt-3 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 flex items-start gap-3">
-              <span className="text-red-400 text-sm flex-1">{error}</span>
-              {error.includes('Sign up') && (
-                <Link href="/signup" className="text-indigo-400 hover:text-indigo-300 text-sm font-semibold whitespace-nowrap">Sign up free →</Link>
-              )}
+            <div className="mt-3 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-red-400 text-sm">
+              {error}
             </div>
           )}
-          <p className="text-gray-600 text-xs mt-2.5 text-center">No account needed for first analysis · 3 free/month with signup</p>
         </form>
 
-        {loading && <LoadingSteps />}
+        {loading && <LoadingPulse />}
 
         {result && (
           <div className="space-y-5">
-            {/* Guest banner */}
-            {result.is_guest && (
-              <div className="bg-indigo-950/40 border border-indigo-500/20 rounded-2xl px-5 py-4 flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-white font-semibold text-sm">Get 3 free analyses/month</p>
-                  <p className="text-gray-400 text-xs mt-0.5">Flip plan, ROI model & negotiation guide unlock with free account</p>
-                </div>
-                <Link href="/signup" className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors whitespace-nowrap flex-shrink-0">
-                  Sign up free
-                </Link>
-              </div>
-            )}
-
             {/* Score card */}
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
               <div className="flex items-start gap-5">
@@ -284,17 +217,18 @@ export default function AnalyzePage() {
                       <p className="text-gray-500 text-sm mt-0.5 capitalize">{result.listing.listing_type} · {result.listing.niche}</p>
                     </div>
                     <a href={result.listing.url} target="_blank" rel="noopener noreferrer"
-                      className="text-indigo-400 hover:text-indigo-300 text-xs flex items-center gap-1 flex-shrink-0 mt-0.5">
-                      Flippa ↗
+                      className="text-indigo-400 hover:text-indigo-300 text-xs flex-shrink-0 mt-0.5">
+                      View on Flippa ↗
                     </a>
                   </div>
 
+                  {/* Key metrics */}
                   <div className="grid grid-cols-4 gap-2 mb-3">
                     {[
-                      { label: 'Ask', value: formatCurrency(result.listing.asking_price) },
-                      { label: 'Mo. Profit', value: formatCurrency(result.listing.monthly_profit) },
-                      { label: 'Ann. Rev', value: formatCurrency(result.listing.annual_revenue) },
-                      { label: 'Multiple', value: `${(result.listing.asking_price / (result.listing.monthly_profit * 12)).toFixed(1)}x` },
+                      { label: 'Asking', value: fmt(result.listing.asking_price) },
+                      { label: 'Mo. Profit', value: fmt(result.listing.monthly_profit) },
+                      { label: 'Ann. Rev', value: fmt(result.listing.annual_revenue) },
+                      { label: 'Multiple', value: result.listing.monthly_profit ? `${(result.listing.asking_price / (result.listing.monthly_profit * 12)).toFixed(1)}x` : '—' },
                     ].map(m => (
                       <div key={m.label} className="bg-gray-800/60 rounded-lg p-2.5 text-center">
                         <p className="text-gray-500 text-[10px] uppercase tracking-wide">{m.label}</p>
@@ -307,47 +241,43 @@ export default function AnalyzePage() {
                 </div>
               </div>
 
-              {/* Score breakdown */}
-              <div className="mt-5 pt-5 border-t border-gray-800">
-                <div className="grid grid-cols-5 gap-3">
-                  {Object.entries(result.analysis.score_breakdown).map(([key, val]) => {
-                    const cfg = getScoreColor(val as number)
-                    return (
-                      <div key={key}>
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="text-gray-500 text-[10px] capitalize">{key}</span>
-                          <span className={`text-xs font-bold ${cfg.text}`}>{val}</span>
-                        </div>
-                        <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full transition-all duration-1000"
-                            style={{ width: `${val}%`, backgroundColor: cfg.stroke }}/>
-                        </div>
+              {/* Score breakdown bars */}
+              <div className="mt-5 pt-5 border-t border-gray-800 grid grid-cols-5 gap-3">
+                {Object.entries(result.analysis.score_breakdown).map(([key, val]) => {
+                  const c = scoreColor(val as number)
+                  return (
+                    <div key={key}>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-gray-500 text-[10px] capitalize">{key}</span>
+                        <span className={`text-xs font-bold ${c.text}`}>{val}</span>
                       </div>
-                    )
-                  })}
-                </div>
+                      <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-1000"
+                          style={{ width: `${val}%`, backgroundColor: c.stroke }} />
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
 
-            {/* Tabs */}
+            {/* Tab bar */}
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-1 flex gap-0.5 overflow-x-auto">
-              {tabs.map(tab => (
-                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                  className={`flex-1 min-w-max py-2 px-3 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 ${
-                    activeTab === tab.id ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white'
-                  }`}>
-                  {tab.locked && <span className="text-[10px]">🔒</span>}
-                  {tab.label}
+              {tabs.map(t => (
+                <button key={t.id} onClick={() => setTab(t.id)}
+                  className={`flex-shrink-0 py-2 px-3 rounded-lg text-xs font-semibold transition-colors ${tab === t.id ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white'}`}>
+                  {t.label}
                 </button>
               ))}
             </div>
 
-            {/* Tab content */}
-            <div>
-              {activeTab === 'overview' && (
+            {/* Tab panels */}
+            <div className="min-h-48">
+
+              {tab === 'overview' && (
                 <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 space-y-5">
                   <div>
-                    <h3 className="text-white font-semibold mb-2 text-sm uppercase tracking-wide text-gray-400">Investment Thesis</h3>
+                    <p className="text-gray-500 text-xs font-semibold uppercase tracking-wide mb-2">Investment Thesis</p>
                     <p className="text-gray-300 leading-relaxed">{result.analysis.investment_thesis}</p>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -366,12 +296,12 @@ export default function AnalyzePage() {
                 </div>
               )}
 
-              {activeTab === 'flags' && (
+              {tab === 'flags' && (
                 <div className="space-y-3">
                   {result.analysis.red_flags.length === 0 ? (
-                    <div className="bg-gray-900 border border-emerald-500/20 rounded-2xl p-8 text-center">
-                      <span className="text-3xl">✅</span>
-                      <p className="text-emerald-400 font-semibold mt-3">No significant red flags detected</p>
+                    <div className="bg-gray-900 border border-emerald-500/20 rounded-2xl p-10 text-center">
+                      <p className="text-3xl mb-3">✅</p>
+                      <p className="text-emerald-400 font-semibold">No significant red flags detected</p>
                     </div>
                   ) : result.analysis.red_flags.map((flag, i) => (
                     <div key={i} className={`border rounded-xl p-4 ${sev[flag.severity].card}`}>
@@ -389,20 +319,12 @@ export default function AnalyzePage() {
                 </div>
               )}
 
-              {activeTab === 'opportunities' && (
+              {tab === 'opportunities' && (
                 <div className="space-y-3">
                   {result.analysis.growth_opportunities.map((opp, i) => (
-                    <div key={i} className={`border rounded-xl p-4 ${
-                      opp.impact === 'high' ? 'border-emerald-500/30 bg-emerald-950/20' :
-                      opp.impact === 'medium' ? 'border-blue-500/30 bg-blue-950/20' :
-                      'border-gray-700 bg-gray-800/30'
-                    }`}>
+                    <div key={i} className={`border rounded-xl p-4 ${imp[opp.impact].card}`}>
                       <div className="flex items-start gap-3">
-                        <span className={`text-[10px] font-bold px-2 py-1 rounded-full border flex-shrink-0 mt-0.5 ${
-                          opp.impact === 'high' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20' :
-                          opp.impact === 'medium' ? 'bg-blue-500/15 text-blue-400 border-blue-500/20' :
-                          'bg-gray-700 text-gray-400 border-gray-600'
-                        }`}>
+                        <span className={`text-[10px] font-bold px-2 py-1 rounded-full border flex-shrink-0 mt-0.5 ${imp[opp.impact].badge}`}>
                           {opp.impact.toUpperCase()} IMPACT
                         </span>
                         <div className="flex-1">
@@ -418,23 +340,23 @@ export default function AnalyzePage() {
                 </div>
               )}
 
-              {activeTab === 'valuation' && (
+              {tab === 'valuation' && (
                 <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
                   <div className="grid grid-cols-2 gap-4 mb-6">
                     <div className="bg-gray-800/60 rounded-xl p-4 text-center">
                       <p className="text-gray-500 text-xs mb-1">Fair Value Range</p>
                       <p className="text-white font-bold text-xl">
-                        {formatCurrency(result.analysis.valuation.fair_value_min)} – {formatCurrency(result.analysis.valuation.fair_value_max)}
+                        {fmt(result.analysis.valuation.fair_value_min)} – {fmt(result.analysis.valuation.fair_value_max)}
                       </p>
                     </div>
                     <div className="bg-gray-800/60 rounded-xl p-4 text-center">
                       <p className="text-gray-500 text-xs mb-1">Asking Price</p>
-                      <p className={`font-bold text-xl ${
-                        result.listing.asking_price <= result.analysis.valuation.fair_value_max ? 'text-emerald-400' : 'text-red-400'
-                      }`}>{formatCurrency(result.listing.asking_price)}</p>
+                      <p className={`font-bold text-xl ${result.listing.asking_price <= result.analysis.valuation.fair_value_max ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {fmt(result.listing.asking_price)}
+                      </p>
                       <p className="text-gray-500 text-[10px] mt-0.5">
                         {result.listing.asking_price <= result.analysis.valuation.fair_value_min ? '✓ Under fair value' :
-                         result.listing.asking_price <= result.analysis.valuation.fair_value_max ? '~ At fair value' : '⚠ Above fair value'}
+                          result.listing.asking_price <= result.analysis.valuation.fair_value_max ? '~ At fair value' : '⚠ Above fair value'}
                       </p>
                     </div>
                   </div>
@@ -451,10 +373,8 @@ export default function AnalyzePage() {
                 </div>
               )}
 
-              {activeTab === 'plan' && (
-                result.gated?.flip_plan ? (
-                  <GatedOverlay feature="12-Month Flip Plan" onUpgrade={() => {}} />
-                ) : result.analysis.flip_plan ? (
+              {tab === 'plan' && (
+                result.analysis.flip_plan ? (
                   <div className="space-y-4">
                     <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
                       <div className="flex items-center justify-between mb-5">
@@ -465,80 +385,79 @@ export default function AnalyzePage() {
                       </div>
                       <div className="space-y-4">
                         {[
-                          { label: 'Months 1–3', title: 'Foundation', content: result.analysis.flip_plan.months_1_3, color: 'border-blue-500/40 bg-blue-950/20', dot: 'bg-blue-500' },
-                          { label: 'Months 4–6', title: 'Growth', content: result.analysis.flip_plan.months_4_6, color: 'border-emerald-500/40 bg-emerald-950/20', dot: 'bg-emerald-500' },
-                          { label: 'Months 7–12', title: 'Scale & Exit', content: result.analysis.flip_plan.months_7_12, color: 'border-violet-500/40 bg-violet-950/20', dot: 'bg-violet-500' },
-                        ].map(phase => (
-                          <div key={phase.label} className={`border rounded-xl p-4 ${phase.color}`}>
+                          { label: 'Months 1–3', phase: 'Foundation', content: result.analysis.flip_plan.months_1_3, color: 'border-blue-500/40 bg-blue-950/20', dot: 'bg-blue-500' },
+                          { label: 'Months 4–6', phase: 'Growth', content: result.analysis.flip_plan.months_4_6, color: 'border-emerald-500/40 bg-emerald-950/20', dot: 'bg-emerald-500' },
+                          { label: 'Months 7–12', phase: 'Scale & Exit', content: result.analysis.flip_plan.months_7_12, color: 'border-violet-500/40 bg-violet-950/20', dot: 'bg-violet-500' },
+                        ].map(p => (
+                          <div key={p.label} className={`border rounded-xl p-4 ${p.color}`}>
                             <div className="flex items-center gap-2 mb-2">
-                              <div className={`w-2 h-2 rounded-full ${phase.dot}`}/>
-                              <span className="text-gray-400 text-xs font-semibold uppercase tracking-wide">{phase.label} — {phase.title}</span>
+                              <div className={`w-2 h-2 rounded-full ${p.dot}`} />
+                              <span className="text-gray-400 text-xs font-semibold uppercase tracking-wide">{p.label} — {p.phase}</span>
                             </div>
-                            <p className="text-gray-300 text-sm leading-relaxed">{phase.content}</p>
+                            <p className="text-gray-300 text-sm leading-relaxed">{p.content}</p>
                           </div>
                         ))}
                       </div>
                     </div>
                     <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
                       <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-3">Key Value Drivers</p>
-                      <div className="grid grid-cols-1 gap-2">
+                      <div className="space-y-2">
                         {result.analysis.flip_plan.key_value_drivers.map((d, i) => (
                           <div key={i} className="flex items-start gap-3 bg-gray-800/50 rounded-lg p-3">
-                            <span className="text-indigo-400 font-bold text-sm flex-shrink-0">0{i+1}</span>
+                            <span className="text-indigo-400 font-bold text-sm flex-shrink-0">0{i + 1}</span>
                             <p className="text-gray-300 text-sm">{d}</p>
                           </div>
                         ))}
                       </div>
                     </div>
                   </div>
-                ) : <p className="text-gray-500 text-center py-10">Flip plan not available for this analysis</p>
+                ) : <p className="text-gray-500 text-center py-16">Flip plan unavailable for this listing</p>
               )}
 
-              {activeTab === 'roi' && (
-                result.gated?.roi_scenarios ? (
-                  <GatedOverlay feature="ROI Projection Model" onUpgrade={() => {}} />
-                ) : result.analysis.roi_scenarios ? (
+              {tab === 'roi' && (
+                result.analysis.roi_scenarios ? (
                   <div className="space-y-4">
                     <div className="grid grid-cols-3 gap-3">
-                      {Object.values(result.analysis.roi_scenarios).map((scenario, i) => {
-                        const colors = ['text-blue-400 border-blue-500/30 bg-blue-950/20', 'text-emerald-400 border-emerald-500/30 bg-emerald-950/20', 'text-violet-400 border-violet-500/30 bg-violet-950/20']
+                      {Object.values(result.analysis.roi_scenarios).map((s, i) => {
+                        const palette = [
+                          'text-blue-400 border-blue-500/30 bg-blue-950/20',
+                          'text-emerald-400 border-emerald-500/30 bg-emerald-950/20',
+                          'text-violet-400 border-violet-500/30 bg-violet-950/20',
+                        ]
                         return (
-                          <div key={i} className={`border rounded-2xl p-4 ${colors[i]}`}>
-                            <p className="text-xs font-semibold uppercase tracking-wide opacity-70 mb-3">{scenario.label}</p>
-                            <p className="text-2xl font-black mb-0.5">{formatCurrency(scenario.exit_value)}</p>
-                            <p className="text-sm font-bold opacity-80">+{scenario.roi_percent}% ROI</p>
-                            <p className="text-xs opacity-50 mt-1">{scenario.timeline_months} months</p>
+                          <div key={i} className={`border rounded-2xl p-4 ${palette[i]}`}>
+                            <p className="text-xs font-semibold uppercase tracking-wide opacity-70 mb-3">{s.label}</p>
+                            <p className="text-2xl font-black mb-0.5">{fmt(s.exit_value)}</p>
+                            <p className="text-sm font-bold opacity-80">+{s.roi_percent}% ROI</p>
+                            <p className="text-xs opacity-50 mt-1">{s.timeline_months} months</p>
                             <div className="mt-3 pt-3 border-t border-current/10">
-                              <p className="text-xs opacity-60 leading-relaxed">{scenario.assumptions}</p>
+                              <p className="text-xs opacity-60 leading-relaxed">{s.assumptions}</p>
                             </div>
                           </div>
                         )
                       })}
                     </div>
                     <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                      <p className="text-gray-400 text-xs">
-                        💡 ROI projections assume acquisition at asking price. Negotiating to target price improves all scenarios.
-                        Conservative scenario assumes no growth; base assumes moderate execution; optimistic assumes strong execution on all identified growth levers.
+                      <p className="text-gray-500 text-xs leading-relaxed">
+                        💡 ROI projections assume acquisition at asking price. Negotiating down to target price improves all three scenarios. Conservative assumes no growth; base assumes moderate execution; optimistic assumes all growth levers activated.
                       </p>
                     </div>
                   </div>
-                ) : <p className="text-gray-500 text-center py-10">ROI model not available for this analysis</p>
+                ) : <p className="text-gray-500 text-center py-16">ROI model unavailable for this listing</p>
               )}
 
-              {activeTab === 'negotiate' && (
-                result.gated?.negotiation ? (
-                  <GatedOverlay feature="Negotiation Intelligence" onUpgrade={() => {}} />
-                ) : result.analysis.negotiation ? (
+              {tab === 'negotiate' && (
+                result.analysis.negotiation ? (
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-3">
                       <div className="bg-emerald-950/30 border border-emerald-500/30 rounded-2xl p-4 text-center">
-                        <p className="text-gray-500 text-xs mb-1">Target Offer</p>
-                        <p className="text-emerald-400 font-black text-2xl">{formatCurrency(result.analysis.negotiation.target_price)}</p>
-                        <p className="text-gray-500 text-[10px] mt-1">Start here</p>
+                        <p className="text-gray-500 text-xs mb-1">Open With</p>
+                        <p className="text-emerald-400 font-black text-2xl">{fmt(result.analysis.negotiation.target_price)}</p>
+                        <p className="text-gray-500 text-[10px] mt-1">Your target offer</p>
                       </div>
                       <div className="bg-red-950/20 border border-red-500/20 rounded-2xl p-4 text-center">
                         <p className="text-gray-500 text-xs mb-1">Walk Away At</p>
-                        <p className="text-red-400 font-black text-2xl">{formatCurrency(result.analysis.negotiation.walk_away_price)}</p>
+                        <p className="text-red-400 font-black text-2xl">{fmt(result.analysis.negotiation.walk_away_price)}</p>
                         <p className="text-gray-500 text-[10px] mt-1">Maximum acceptable</p>
                       </div>
                     </div>
@@ -558,31 +477,17 @@ export default function AnalyzePage() {
                       <div className="space-y-2">
                         {result.analysis.negotiation.due_diligence_questions.map((q, i) => (
                           <div key={i} className="flex gap-3 items-start bg-gray-800/50 rounded-lg p-3">
-                            <span className="text-indigo-400 font-bold text-xs mt-0.5 flex-shrink-0">Q{i+1}</span>
+                            <span className="text-indigo-400 font-bold text-xs mt-0.5 flex-shrink-0">Q{i + 1}</span>
                             <p className="text-gray-300 text-sm">{q}</p>
                           </div>
                         ))}
                       </div>
                     </div>
                   </div>
-                ) : <p className="text-gray-500 text-center py-10">Negotiation guide not available for this analysis</p>
+                ) : <p className="text-gray-500 text-center py-16">Negotiation guide unavailable for this listing</p>
               )}
-            </div>
 
-            {/* Bottom CTA */}
-            {(result.is_guest || result.gated?.flip_plan) && (
-              <div className="bg-gradient-to-br from-indigo-950/50 to-violet-950/50 border border-indigo-500/20 rounded-2xl p-6">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-white font-bold">Unlock the full analysis</p>
-                    <p className="text-gray-400 text-sm mt-0.5">Flip plan · ROI model · Negotiation guide · 3 analyses/month free</p>
-                  </div>
-                  <Link href="/signup" className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-5 py-2.5 rounded-xl transition-colors whitespace-nowrap flex-shrink-0 shadow-lg shadow-indigo-500/20">
-                    Create Free Account →
-                  </Link>
-                </div>
-              </div>
-            )}
+            </div>
           </div>
         )}
       </div>
