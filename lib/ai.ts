@@ -1,8 +1,29 @@
-import Groq from 'groq-sdk'
 import { z } from 'zod'
 import type { FlippaListing } from './flippa'
 
-const client = new Groq({ apiKey: process.env.GROQ_API_KEY! })
+const GROQ_API_KEY = process.env.GROQ_API_KEY || ''
+
+async function groqChat(
+  model: string,
+  messages: Array<{role: string; content: string}>,
+  opts: { temperature?: number; max_tokens?: number } = {}
+): Promise<string> {
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature: opts.temperature ?? 0.3,
+      max_tokens: opts.max_tokens ?? 4096,
+      response_format: { type: 'json_object' },
+    }),
+  })
+  if (!res.ok) throw new Error(`Groq API ${res.status}: ${await res.text()}`)
+  const data = await res.json() as any
+  return data.choices[0]?.message?.content || '{}'
+}
+
 
 // ─── Zod Schemas ──────────────────────────────────────────────────────────────
 
@@ -174,18 +195,14 @@ Return ONLY valid JSON. No markdown, no backticks, no text before or after the J
 // ─── Main Analysis ────────────────────────────────────────────────────────────
 
 export async function analyzeListingWithAI(listing: FlippaListing): Promise<AnalysisOutput> {
-  const completion = await client.chat.completions.create({
-    model: 'llama-3.3-70b-versatile',
-    messages: [
+  const raw = await groqChat(
+    'llama-3.3-70b-versatile',
+    [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: buildPrompt(listing) },
     ],
-    temperature: 0.3,
-    max_tokens: 4096,
-    response_format: { type: 'json_object' },
-  })
-
-  const raw = completion.choices[0]?.message?.content || '{}'
+    { temperature: 0.3, max_tokens: 4096 }
+  )
 
   let parsed: unknown
   try {
@@ -210,30 +227,14 @@ export async function analyzeListingWithAI(listing: FlippaListing): Promise<Anal
 // ─── Quick Score (for Scout) ──────────────────────────────────────────────────
 
 export async function quickScoreListing(listing: FlippaListing): Promise<number> {
-  const completion = await client.chat.completions.create({
-    model: 'llama-3.1-8b-instant',
-    messages: [
-      {
-        role: 'system',
-        content: 'You are a digital business acquisition expert. Score listings 0-100. Respond with ONLY a JSON object: {"score": <number>}',
-      },
-      {
-        role: 'user',
-        content: `Score this Flippa listing (0-100 acquisition potential):
-Title: ${listing.title}
-Asking: $${listing.asking_price.toLocaleString()}
-Monthly Revenue: $${listing.monthly_revenue.toLocaleString()}
-Monthly Profit: $${(listing.monthly_profit || 0).toLocaleString()}
-Age: ${listing.age_months} months
-Monetization: ${Array.isArray(listing.monetization) ? listing.monetization.join(', ') : listing.monetization}
-
-Return ONLY: {"score": <number>}`,
-      },
+  const raw = await groqChat(
+    'llama-3.1-8b-instant',
+    [
+      { role: 'system', content: 'You are a digital business acquisition expert. Score listings 0-100. Respond ONLY with JSON: {"score": <number>}' },
+      { role: 'user', content: `Score this Flippa listing:\nTitle: ${listing.title}\nAsking: $${listing.asking_price.toLocaleString()}\nMonthly Profit: $${(listing.monthly_profit || 0).toLocaleString()}\nReturn ONLY: {"score": <number>}` },
     ],
-    temperature: 0.1,
-    max_tokens: 50,
-    response_format: { type: 'json_object' },
-  })
+    { temperature: 0.1, max_tokens: 50 }
+  )
 
   const raw = completion.choices[0]?.message?.content || '{"score": 50}'
   try {
