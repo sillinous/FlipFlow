@@ -3,6 +3,3 @@ node_modules/
 .env.local
 .env
 *.tsbuildinfo
-node_modules/
-out/
-netlify/functions-built/
