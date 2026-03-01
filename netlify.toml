@@ -3,10 +3,6 @@
   publish = "out"
   functions = "netlify/functions-built"
 
-[functions]
-  node_bundler = "esbuild"
-  external_node_modules = ["@anthropic-ai/sdk", "cheerio"]
-
 [[redirects]]
   from = "/api/analyze"
   to = "/.netlify/functions/analyze"
