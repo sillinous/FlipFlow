@@ -1,8 +1,8 @@
-import Anthropic from '@anthropic-ai/sdk'
+import Groq from 'groq-sdk'
 import { z } from 'zod'
 import type { FlippaListing } from './flippa'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
+const client = new Groq({ apiKey: process.env.GROQ_API_KEY! })
 
 // ─── Zod Schemas ──────────────────────────────────────────────────────────────
 
@@ -83,81 +83,63 @@ You analyze Flippa listings with the precision of a buyer who has completed 200+
 
 Your analysis must be:
 - Brutally honest about red flags with zero sugarcoating
-- Hyper-specific about growth tactics (not "add SEO" — "target [specific keyword cluster] using [specific tactic]")
-- Grounded in real exit multiples: SaaS 3-5x ARR, content sites 30-42x monthly profit, eComm 2-4x annual profit, SaaS tools 4-6x ARR, newsletters 24-36x monthly profit, marketplaces 3-5x ARR
+- Hyper-specific about growth tactics (not "add SEO" — name specific keyword clusters, specific tactics)
+- Grounded in real exit multiples: SaaS 3-5x ARR, content sites 30-42x monthly profit, eComm 2-4x annual profit, newsletters 24-36x monthly profit
 - Decisive and opinionated — buyers need conviction, not hedging
 
 FlipScore dimensions (0-100 each):
 - overall: Weighted composite. 80+ = Strong Buy, 65-79 = Consider, 50-64 = Risky, <50 = Pass
 - financials: Revenue quality, consistency, recurring vs one-time, profit margins, growth trajectory
 - traffic: Source diversity, organic %, trend direction, concentration risk, defensibility
-- risk: 80 = very low risk, 20 = very high risk. Weight: owner dependency, platform risk, revenue volatility, legal/IP
-- growth: Untapped opportunities, market ceiling, current optimization level, competitive moat
-- operations: Transfer ease, tech complexity, time-to-operate, documentation quality, team needs
+- risk: 80 = very low risk, 20 = very high risk. Weight: owner dependency, platform risk, revenue volatility
+- growth: Untapped opportunities, market ceiling, current optimization level
+- operations: Transfer ease, tech complexity, time-to-operate, documentation quality
 
-REQUIRED: Include a 12-month flip plan with concrete milestones. Include ROI projections for 3 target scenarios. Include negotiation leverage points to get a better price.
+CRITICAL: You MUST respond with ONLY a valid JSON object. No markdown, no backticks, no explanation. Start your response with { and end with }.
 
-You MUST respond with valid JSON ONLY — no markdown, no preamble, no backticks. Match this exact schema:
+Respond with exactly this JSON structure:
 {
   "flip_score": {
-    "overall": 0-100,
-    "financials": 0-100,
-    "traffic": 0-100,
-    "risk": 0-100,
-    "growth": 0-100,
-    "operations": 0-100
+    "overall": <0-100>,
+    "financials": <0-100>,
+    "traffic": <0-100>,
+    "risk": <0-100>,
+    "growth": <0-100>,
+    "operations": <0-100>
   },
   "red_flags": [
-    { "severity": "high|medium|low", "title": "Short title", "description": "Detailed explanation" }
+    { "severity": "high|medium|low", "title": "...", "description": "..." }
   ],
   "growth_opportunities": [
-    { "impact": "high|medium|low", "title": "Short title", "description": "Specific tactic", "effort": "Low|Medium|High" }
+    { "impact": "high|medium|low", "title": "...", "description": "...", "effort": "Low|Medium|High" }
   ],
-  "summary": "2-3 sentence executive summary of this deal",
-  "investment_thesis": "3-4 sentences on why you would or wouldn't buy this. Be specific about what makes this worth acquiring or not.",
+  "summary": "2-3 sentence executive summary",
+  "investment_thesis": "3-4 sentences on why you would or would not buy this",
   "valuation": {
-    "fair_value_min": number,
-    "fair_value_max": number,
-    "multiple_analysis": "Explain the multiple vs market comps",
-    "recommendation": "Specific pricing advice and negotiation angle"
+    "fair_value_min": <number>,
+    "fair_value_max": <number>,
+    "multiple_analysis": "explain the multiple vs market comps",
+    "recommendation": "specific pricing and negotiation advice"
   },
   "listing_type": "website|saas|ecommerce|app|content|other",
-  "niche": "e.g. personal finance, B2B SaaS, fitness, etc.",
+  "niche": "e.g. personal finance, B2B SaaS, fitness",
   "flip_plan": {
-    "months_1_3": "Specific actions in first 90 days. What to fix, optimize, or launch immediately.",
-    "months_4_6": "Mid-term growth moves. New channels, product improvements, partnerships.",
-    "months_7_12": "Scale phase. What to build toward exit. How to maximize sale price.",
-    "target_exit_multiple": 3.5,
-    "key_value_drivers": ["specific lever 1", "specific lever 2", "specific lever 3"]
+    "months_1_3": "specific actions in first 90 days",
+    "months_4_6": "mid-term growth moves",
+    "months_7_12": "scale phase and exit prep",
+    "target_exit_multiple": <number>,
+    "key_value_drivers": ["driver 1", "driver 2", "driver 3"]
   },
   "roi_scenarios": {
-    "conservative": {
-      "label": "Conservative",
-      "exit_value": 100000,
-      "roi_percent": 20,
-      "timeline_months": 18,
-      "assumptions": "What must be true for this scenario"
-    },
-    "base": {
-      "label": "Base Case",
-      "exit_value": 150000,
-      "roi_percent": 50,
-      "timeline_months": 12,
-      "assumptions": "What must be true for this scenario"
-    },
-    "optimistic": {
-      "label": "Optimistic",
-      "exit_value": 200000,
-      "roi_percent": 100,
-      "timeline_months": 12,
-      "assumptions": "What must be true for this scenario"
-    }
+    "conservative": { "label": "Conservative", "exit_value": <number>, "roi_percent": <number>, "timeline_months": 18, "assumptions": "..." },
+    "base": { "label": "Base Case", "exit_value": <number>, "roi_percent": <number>, "timeline_months": 12, "assumptions": "..." },
+    "optimistic": { "label": "Optimistic", "exit_value": <number>, "roi_percent": <number>, "timeline_months": 12, "assumptions": "..." }
   },
   "negotiation": {
-    "target_price": 100000,
-    "walk_away_price": 120000,
-    "leverage_points": ["specific weakness to cite", "comparable sale reference", "risk factor to negotiate on"],
-    "due_diligence_questions": ["critical question 1", "critical question 2", "critical question 3"]
+    "target_price": <number>,
+    "walk_away_price": <number>,
+    "leverage_points": ["point 1", "point 2", "point 3"],
+    "due_diligence_questions": ["question 1", "question 2", "question 3"]
   }
 }`
 
@@ -171,7 +153,7 @@ function buildPrompt(listing: FlippaListing): string {
     ? listing.monetization.join(', ')
     : (listing.monetization || 'Unknown')
 
-  return `Analyze this Flippa listing:
+  return `Analyze this Flippa listing and respond with ONLY a JSON object:
 
 TITLE: ${listing.title}
 URL: ${listing.url}
@@ -184,49 +166,79 @@ BUSINESS AGE: ${listing.age_months} months
 MONETIZATION: ${monetizationStr}
 
 DESCRIPTION:
-${(listing.description || '').slice(0, 1500)}
+${(listing.description || '').slice(0, 2000)}
 
-Provide a thorough FlipFlow analysis. Be specific, honest, and decisive.`
+Return ONLY valid JSON. No markdown, no backticks, no text before or after the JSON.`
 }
 
-// ─── Main Analysis Function ───────────────────────────────────────────────────
+// ─── Main Analysis ────────────────────────────────────────────────────────────
 
 export async function analyzeListingWithAI(listing: FlippaListing): Promise<AnalysisOutput> {
-  const message = await client.messages.create({
-    model: 'claude-opus-4-5',
+  const completion = await client.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: buildPrompt(listing) },
+    ],
+    temperature: 0.3,
     max_tokens: 4096,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: buildPrompt(listing) }],
+    response_format: { type: 'json_object' },
   })
 
-  const rawText = message.content[0].type === 'text' ? message.content[0].text : ''
+  const raw = completion.choices[0]?.message?.content || '{}'
 
+  let parsed: unknown
   try {
-    const jsonText = rawText.replace(/```json?\n?/g, '').replace(/```\n?/g, '').trim()
-    const rawParsed = JSON.parse(jsonText)
-    return AnalysisOutputSchema.parse(rawParsed)
-  } catch (e) {
-    console.error('AI parse error:', e, '\nRaw:', rawText.slice(0, 500))
-    throw new Error('AI returned invalid analysis format. Please try again.')
+    parsed = JSON.parse(raw)
+  } catch {
+    // Try to extract JSON if there's surrounding text
+    const match = raw.match(/\{[\s\S]*\}/)
+    if (!match) throw new Error('AI returned invalid JSON')
+    parsed = JSON.parse(match[0])
   }
+
+  const result = AnalysisOutputSchema.safeParse(parsed)
+  if (!result.success) {
+    console.error('Schema validation failed:', result.error.issues.slice(0, 3))
+    // Return with graceful fallback for optional fields
+    return parsed as AnalysisOutput
+  }
+
+  return result.data
 }
 
-// ─── Quick Score (for Scout Agent) ───────────────────────────────────────────
+// ─── Quick Score (for Scout) ──────────────────────────────────────────────────
 
 export async function quickScoreListing(listing: FlippaListing): Promise<number> {
-  try {
-    const message = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 100,
-      system: 'You are a digital business acquisition expert. Return ONLY a JSON object with one field: {"score": 0-100} where 100 = exceptional deal. No other text.',
-      messages: [{
+  const completion = await client.chat.completions.create({
+    model: 'llama-3.1-8b-instant',
+    messages: [
+      {
+        role: 'system',
+        content: 'You are a digital business acquisition expert. Score listings 0-100. Respond with ONLY a JSON object: {"score": <number>}',
+      },
+      {
         role: 'user',
-        content: `Score this Flippa listing (0-100): ${listing.title} | Price: $${listing.asking_price.toLocaleString()} | Monthly profit: $${listing.monthly_profit.toLocaleString()} | Age: ${listing.age_months}mo`
-      }]
-    })
-    const text = message.content[0].type === 'text' ? message.content[0].text : ''
-    const parsed = JSON.parse(text.replace(/```json?|```/g, '').trim())
-    return Math.min(100, Math.max(0, parsed.score || 50))
+        content: `Score this Flippa listing (0-100 acquisition potential):
+Title: ${listing.title}
+Asking: $${listing.asking_price.toLocaleString()}
+Monthly Revenue: $${listing.monthly_revenue.toLocaleString()}
+Monthly Profit: $${(listing.monthly_profit || 0).toLocaleString()}
+Age: ${listing.age_months} months
+Monetization: ${Array.isArray(listing.monetization) ? listing.monetization.join(', ') : listing.monetization}
+
+Return ONLY: {"score": <number>}`,
+      },
+    ],
+    temperature: 0.1,
+    max_tokens: 50,
+    response_format: { type: 'json_object' },
+  })
+
+  const raw = completion.choices[0]?.message?.content || '{"score": 50}'
+  try {
+    const parsed = JSON.parse(raw)
+    return Math.min(100, Math.max(0, Number(parsed.score) || 50))
   } catch {
     return 50
   }
