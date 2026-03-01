@@ -1,5 +1,4 @@
 [build]
-  command = "echo 'Static files pre-built'"
   publish = "out"
   functions = "netlify/functions-built"
 
